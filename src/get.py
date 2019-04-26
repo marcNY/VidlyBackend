@@ -1,7 +1,10 @@
 import json
+import boto3
+import os
 
 # import requests
-
+dynamo = boto3.client('dynamodb')
+table_name = os.environ['TABLE_NAME'] #TableName provided by template.yaml.
 
 def lambda_handler(event, context):
     """Sample pure Lambda function
@@ -36,7 +39,6 @@ def lambda_handler(event, context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "message": "hello world",
-            # "location": ip.text.replace("\n", "")
+            dynamo.scan(TableName=table_name)
         }),
     }
