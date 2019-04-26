@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  sam-app
+
+  Sample SAM Template for sam-app
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals: # any parameters you want available to all your resources
+    Function:
+      Runtime: python3.7 # language used at runtime
+      Timeout: 180 # timeout for a given lambda function execution
+      Environment:
+          Variables: # these will be important later
+              DYNAMO_TABLE: !Ref DynamoMovieTable
+              DB_ENDPOINT: http://dynamodb.us-east-1.amazonaws.com
+              REGION_NAME: eu-west-3
+
+Resources:
+  GetMoviesFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: get.lambda_handler
+      Runtime: python3.6
+      Policies: AmazonDynamoDBFullAccess # default IAM policy that allows the lambda to read and write to our soon to be defined Dynamo instance
+      Events:
+        # Timer:
+        #   Type: Schedule
+        #   Properties:
+        #       Schedule: cron(0 4 * * ? *) # will run once a day at midnight
+        HelloWorld:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /movies
+            Method: get
+  WriteMovieFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: post.lambda_handler
+      Runtime: python3.6
+      Policies: AmazonDynamoDBFullAccess # default IAM policy that allows the lambda to read and write to our soon to be defined Dynamo instance
+      Events:
+        HelloWorld:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /movies
+            Method: post
+  StatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+        Handler: stats_handler
+        Policies: # default (provided by AWS) IAM policies
+            - CloudWatchLogsFullAccess
+            - AmazonSESFullAccess
+        Events:
+            Timer:
+                Type: Schedule
+                Properties:
+                    Schedule: cron(0 4 * * ? *)
+                    
+  DynamoMovieTable:
+    Type: AWS::Serverless::SimpleTable # if you want to define a more complex table, use AWS::DynamoDB::Table
+    TableName: MovieTable
+    PrimaryKey:
+        Name: movieId
+        Type: String
+    ProvisionedThroughput:
+        ReadCapacityUnit: 1
+        WriteCapacityUnits: 1
+    Tags:
+        AppType: Serverless
+
+  FrontendS3MoviesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+    BucketName: moviesapp-frontend-bucket
+    WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    VersioningConfiguration:
+        Status: Enabled
+        DeletionPolicy: Retain
+
+  S3FrontendBucketPolicy: # define a managed (managed by the user) policy that makes the bucket readable.
+      Type: AWS::S3::BucketPolicy
+      Properties:
+          Bucket: !Ref FrontendS3MoviesBucket # a reference to the bucket defined above
+          PolicyDocument:
+              Statement:
+                  -
+                    Action:
+                        - "s3:GetObject"
+                    Effect: "Allow"
+                    Resource:
+                        - !Join # this is essentially a string join
+                          - ''
+                          - - 'arn:aws:s3:::'
+                            - !Ref FrontendS3BucketDev
+                            - '/*'
+                    Principal: '*'
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  MoviesApi:
+    Description: "API Gateway endpoint URL for Prod stage for Movies function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+  GetMoviesFunction:
+    Description: "Hello World Lambda Function ARN"
+    Value: !GetAtt GetMoviesFunction.Arn
+  WriteMovieFunction:
+    Description: "Write movie function Arn"
+    Value: !GetAtt WriteMovieFunction.Arn
